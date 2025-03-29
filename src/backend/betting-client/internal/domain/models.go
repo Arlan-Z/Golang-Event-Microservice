@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// EventResult defines the possible outcomes of an event.
 type EventResult string
 
 const (
@@ -16,6 +17,7 @@ const (
 	ResultCanceled EventResult = "Canceled"
 )
 
+// EventType defines the type of sport/game for the event.
 type EventType string
 
 const (
@@ -26,20 +28,23 @@ const (
 	TypeOther        EventType = "Other"
 )
 
-const apiTimeLayout = "2006-01-02T15:04:05"
+// Определяем ожидаемый формат времени из API
+const apiTimeLayout = "2006-01-02T15:04:05" // YYYY-MM-DDTHH:MM:SS
 
+// Event represents the main information about a betting event.
 type Event struct {
-	ID               string    `json:"id"`
-	EventName        string    `json:"eventName"`
-	Type             EventType `json:"type"`
-	HomeTeam         string    `json:"homeTeam"`
-	AwayTeam         string    `json:"awayTeam"`
-	EventStartDate   time.Time
-	EventEndDate     time.Time
+	ID               string      `json:"id"`
+	EventName        string      `json:"eventName"`
+	Type             EventType   `json:"type"`
+	HomeTeam         string      `json:"homeTeam"`
+	AwayTeam         string      `json:"awayTeam"`
+	EventStartDate   time.Time   // Убрали тег json
+	EventEndDate     time.Time   // Убрали тег json
 	EventSubscribers []string    `json:"eventSubscribers"`
 	EventResult      EventResult `json:"eventResult,omitempty"`
 }
 
+// Кастомный UnmarshalJSON для типа Event
 func (e *Event) UnmarshalJSON(data []byte) error {
 	type EventAlias struct {
 		ID               string      `json:"id"`
@@ -47,8 +52,8 @@ func (e *Event) UnmarshalJSON(data []byte) error {
 		Type             EventType   `json:"type"`
 		HomeTeam         string      `json:"homeTeam"`
 		AwayTeam         string      `json:"awayTeam"`
-		EventStartDate   string      `json:"eventStartDate"`
-		EventEndDate     string      `json:"eventEndDate"`
+		EventStartDate   string      `json:"eventStartDate"` // Считываем как строку
+		EventEndDate     string      `json:"eventEndDate"`   // Считываем как строку
 		EventSubscribers []string    `json:"eventSubscribers"`
 		EventResult      EventResult `json:"eventResult,omitempty"`
 	}
@@ -80,25 +85,64 @@ func (e *Event) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Round represents details of a single round within an event.
 type Round struct {
 	RoundNumber   int       `json:"roundNumber"`
 	HomeTeamScore int       `json:"homeTeamScore"`
 	AwayTeamScore int       `json:"awayTeamScore"`
-	RoundDateTime time.Time `json:"roundDateTime"`
+	RoundDateTime time.Time // Убираем тег json, будем обрабатывать в UnmarshalJSON
 }
 
+// --- ДОБАВЛЕНО: Кастомный UnmarshalJSON для типа Round ---
+func (r *Round) UnmarshalJSON(data []byte) error {
+	// Псевдоним с полем времени как строкой
+	type RoundAlias struct {
+		RoundNumber   int    `json:"roundNumber"`
+		HomeTeamScore int    `json:"homeTeamScore"`
+		AwayTeamScore int    `json:"awayTeamScore"`
+		RoundDateTime string `json:"roundDateTime"` // Считываем как строку
+	}
+
+	var alias RoundAlias
+	// Декодируем в псевдоним
+	if err := json.Unmarshal(data, &alias); err != nil {
+		return fmt.Errorf("failed to unmarshal round alias: %w", err)
+	}
+
+	// Копируем обычные поля
+	r.RoundNumber = alias.RoundNumber
+	r.HomeTeamScore = alias.HomeTeamScore
+	r.AwayTeamScore = alias.AwayTeamScore
+
+	// Парсим строку времени, используя наш кастомный формат
+	var err error
+	r.RoundDateTime, err = time.Parse(apiTimeLayout, alias.RoundDateTime)
+	if err != nil {
+		return fmt.Errorf("failed to parse RoundDateTime '%s' using layout '%s': %w", alias.RoundDateTime, apiTimeLayout, err)
+	}
+
+	return nil
+}
+
+// --- КОНЕЦ ДОБАВЛЕННОГО КОДА ---
+
+// EventDetails represents detailed information about an event, including rounds.
+// Так как UnmarshalJSON для Round теперь обрабатывает время, EventDetails не требует изменений
 type EventDetails struct {
 	ID          string  `json:"id"`
 	EventName   string  `json:"eventName"`
 	EventRounds []Round `json:"eventRounds"`
 }
 
+// SubscriptionRequest is the payload for subscribing to an event.
 type SubscriptionRequest struct {
 	CallbackURL string `json:"callbackUrl"`
 }
 
+// SubscriptionResponse is the confirmation message after subscribing.
 type SubscriptionResponse string
 
+// EventNotification is the payload received on the callback URL when an event finishes.
 type EventNotification struct {
 	EventID   string      `json:"eventId"`
 	EventName string      `json:"eventName"`
