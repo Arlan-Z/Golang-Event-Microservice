@@ -1,0 +1,123 @@
+@startuml Combined Microservice Overview
+
+title Sequence: Betting Service Overview
+
+actor User
+participant Scheduler <<Timer>>
+participant BettingService <<Microservice>>
+database Database <<SQLite>>
+participant EventSourceAPI <<External>>
+participant PayoutAPI <<External>>
+
+group User Interactions
+
+    User -> BettingService: GET /api/v1/events
+    activate BettingService
+    BettingService -> Database: Query Active Events
+    activate Database
+    Database --> BettingService: Active Event Data
+    deactivate Database
+    BettingService --> User: 200 OK (Event List)
+    deactivate BettingService
+
+    User -> BettingService: POST /api/v1/bets (Bet Details)
+    activate BettingService
+    BettingService -> Database: Verify Event Status & Get Odds
+    activate Database
+    Database --> BettingService: Event Status & Odds
+    deactivate Database
+    alt Event Active
+        BettingService -> Database: Save Bet (with recorded odds)
+        activate Database
+        Database --> BettingService: OK / Error
+        deactivate Database
+        alt Save OK
+            BettingService --> User: 201 Created (Bet Info)
+        else Save Error
+            BettingService --> User: 500 Internal Server Error
+        end alt
+    else Event Inactive or Not Found
+        BettingService --> User: 404 Not Found / 409 Conflict
+    end alt
+    deactivate BettingService
+
+    User -> BettingService: POST /api/v1/events/{id}/finalize (Result)
+    activate BettingService
+    note right: Manually triggers the same\nfinalization logic as below.
+    BettingService -> BettingService: Initiate Finalization(EventID, Result)
+    ' Details skipped here for brevity, see below
+    BettingService --> User: 200 OK / Error (404, 409, 500)
+    deactivate BettingService
+
+end group
+
+group Background Synchronization & Processing
+
+    Scheduler -> BettingService: Trigger Sync
+    activate BettingService
+
+    BettingService -> EventSourceAPI: GET /api/Events/all
+    activate EventSourceAPI
+    EventSourceAPI --> BettingService: List of Events (External DTOs)
+    deactivate EventSourceAPI
+
+    BettingService -> BettingService: Process Received Events
+    loop For Each Fetched Event
+        BettingService -> Database: Upsert Event Data
+        activate Database
+        Database --> BettingService: OK/Error
+        deactivate Database
+
+        alt Event Finalized in Source (Win/Loss/Draw Result)
+            BettingService -> BettingService: **Initiate Finalization (Internal Trigger)**
+            activate BettingService #DarkSeaGreen
+                ' Check if already finalized locally (simplified)
+                BettingService -> Database: Get Event & Pending Bets
+                activate Database
+                Database --> BettingService: Event & Bet Data
+                deactivate Database
+                alt Event Needs Finalization Locally
+                    BettingService -> BettingService: Calculate Bets
+                    BettingService -> Database: Update Bets (Won/Lost) & Payouts
+                    activate Database
+                    Database --> BettingService: OK/Error
+                    deactivate Database
+                    loop For Each Winning Bet
+                        BettingService -> PayoutAPI: Notify Payout
+                        activate PayoutAPI
+                        PayoutAPI --> BettingService: OK/Error
+                        deactivate PayoutAPI
+                        BettingService -> Database: Update Bet (Paid/Failed)
+                        activate Database
+                        Database --> BettingService: OK/Error
+                        deactivate Database
+                    end loop
+                    BettingService -> Database: Mark Event as Finalized
+                    activate Database
+                    Database --> BettingService: OK/Error
+                    deactivate Database
+                else Event Already Finalized Locally
+                     BettingService -> BettingService: Log Skip
+                end alt
+            deactivate BettingService #DarkSeaGreen
+
+        else Event Canceled in Source
+             BettingService -> BettingService: **Initiate Bet Cancellation (Internal Trigger)**
+             activate BettingService #LightSalmon
+                BettingService -> Database: Get Pending Bets
+                activate Database
+                Database --> BettingService: Bet Data
+                deactivate Database
+                BettingService -> Database: Update Bets to Canceled
+                activate Database
+                Database --> BettingService: OK/Error
+                deactivate Database
+             deactivate BettingService #LightSalmon
+        end alt
+    end loop
+    BettingService -> BettingService: Log Sync Summary
+    deactivate BettingService
+
+end group
+
+@enduml
