@@ -1,0 +1,23 @@
+# .dockerignore
+
+# Git / VCS
+.git
+.gitignore
+
+# IDE / Editor specific
+.idea
+.vscode
+
+# Local data / Build artifacts
+app-data/
+*.db
+*.db-journal
+betting_service
+*.exe
+
+# OS specific
+*.DS_Store
+Thumbs.db
+
+# Go vendor directory (if not needed)
+# vendor/
