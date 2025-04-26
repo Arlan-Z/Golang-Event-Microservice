@@ -1,0 +1,8 @@
+http_server:
+  port: "8080"
+  timeout: "5s"
+database:
+  path: "./data/events.db" 
+payout_service:
+  url: "http://localhost:8081"
+  timeout: "3s"
