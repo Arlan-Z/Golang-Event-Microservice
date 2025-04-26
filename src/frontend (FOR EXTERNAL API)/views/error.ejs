@@ -1,0 +1,7 @@
+<%- include('partials/header', { message: null }) %> <%# Ensure header doesn't show its own message %>
+
+<h1>Error <%= typeof status !== 'undefined' ? status : 'Occurred' %></h1>
+<p><%= message %></p>
+<a href="/">Go Back Home</a>
+
+<%- include('partials/footer') %>

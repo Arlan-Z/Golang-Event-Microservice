@@ -1,0 +1,38 @@
+<%- include('partials/header') %>
+
+<h1>Create New Event</h1>
+
+<form action="/events" method="POST">
+    <div class="form-group">
+        <label for="eventName">Event Name:</label>
+        <input type="text" id="eventName" name="eventName" required>
+    </div>
+    <div class="form-group">
+        <label for="type">Type:</label>
+        <select id="type" name="type">
+            <option value="0">Football</option> <%# Adjust values based on your API's EventType enum %>
+            <option value="1">Basketball</option>
+            <option value="2">Tennis</option>
+            <option value="3">Other</option>
+        </select>
+    </div>
+     <div class="form-group">
+        <label for="homeTeam">Home Team:</label>
+        <input type="text" id="homeTeam" name="homeTeam" required>
+    </div>
+     <div class="form-group">
+        <label for="awayTeam">Away Team:</label>
+        <input type="text" id="awayTeam" name="awayTeam" required>
+    </div>
+    <div class="form-group">
+        <label for="eventStartDate">Start Date/Time:</label>
+        <input type="datetime-local" id="eventStartDate" name="eventStartDate">
+    </div>
+     <div class="form-group">
+        <label for="eventEndDate">End Date/Time:</label>
+        <input type="datetime-local" id="eventEndDate" name="eventEndDate">
+    </div>
+    <button type="submit">Create Event</button>
+</form>
+
+<%- include('partials/footer') %>

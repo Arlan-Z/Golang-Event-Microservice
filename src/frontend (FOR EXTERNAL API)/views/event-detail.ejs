@@ -1,0 +1,81 @@
+<%- include('partials/header') %>
+
+<% if (event) { %>
+    <h1>Event: <%= event.eventName %> (<%= event.id %>)</h1>
+    <p><strong>Status:</strong> <%= event.eventResult %></p>
+    <p><strong>Type:</strong> <%= event.type %></p>
+    <p><strong>Teams:</strong> <%= event.homeTeam %> vs <%= event.awayTeam %></p>
+    <p><strong>Dates:</strong> <%= new Date(event.eventStartDate).toLocaleString() %> to <%= new Date(event.eventEndDate).toLocaleString() %></p>
+    <p><strong>Odds:</strong> Home: <%= event.homeWinChance?.toFixed(2) ?? 'N/A' %> | Draw: <%= event.drawChance?.toFixed(2) ?? 'N/A' %> | Away: <%= event.awayWinChance?.toFixed(2) ?? 'N/A' %></p>
+
+    <% if (event.eventResult === 'Pending') { %>
+    <div class="actions">
+         <!-- End Event Form -->
+         <form action="/events/<%= event.id %>/end?_method=POST" method="POST" style="display: inline;">
+             <button type="submit">End Event & Calculate Result</button>
+         </form>
+         <!-- Cancel Event Form -->
+         <form action="/events/<%= event.id %>/cancel?_method=POST" method="POST" style="display: inline;">
+             <button type="submit" class="btn-warning">Cancel Event</button>
+         </form>
+         <hr>
+         <!-- Subscribe Form -->
+         <form action="/events/<%= event.id %>/subscribe?_method=POST" method="POST">
+            <div class="form-group">
+                <label for="callbackUrl">Subscribe (Webhook URL):</label>
+                <input type="url" id="callbackUrl" name="callbackUrl" placeholder="https://your-webhook-receiver.com/results" required>
+                <button type="submit">Subscribe</button>
+            </div>
+         </form>
+    </div>
+    <% } %>
+
+    <h2>Rounds / Details</h2>
+    <% if (event.eventRounds && event.eventRounds.length > 0) { %>
+        <table>
+            <thead>
+                <tr>
+                    <th>Round #</th>
+                    <th>Home Score</th>
+                    <th>Away Score</th>
+                    <th>Time</th>
+                    <!-- Add Actions column if you implement editing -->
+                </tr>
+            </thead>
+            <tbody>
+                <% event.eventRounds.sort((a, b) => a.roundNumber - b.roundNumber).forEach(round => { %>
+                    <tr>
+                        <td><%= round.roundNumber %></td>
+                        <td><%= round.homeTeamScore %></td>
+                        <td><%= round.awayTeamScore %></td>
+                        <td><%= new Date(round.roundDateTime).toLocaleString() %></td>
+                         <!-- Example Edit Button (requires PATCH handling)
+                        <td>
+                            <form action="/events/<%= event.id %>/details/update?_method=PATCH" method="POST">
+                                <input type="hidden" name="roundNumber" value="<%= round.roundNumber %>">
+                                <input type="number" name="homeTeamScore" value="<%= round.homeTeamScore %>" size="3">
+                                <input type="number" name="awayTeamScore" value="<%= round.awayTeamScore %>" size="3">
+                                <button type="submit">Update</button>
+                            </form>
+                        </td>
+                         -->
+                    </tr>
+                <% }); %>
+            </tbody>
+        </table>
+    <% } else { %>
+        <p>No rounds recorded yet.</p>
+    <% } %>
+
+    <% if (event.eventResult === 'Pending') { %>
+        <hr>
+        <a href="/events/<%= event.id %>/details/new" class="btn">Add New Round/Detail</a>
+    <% } %>
+
+
+<% } else { %>
+    <h1>Event Not Found</h1>
+    <p>The requested event could not be found.</p>
+<% } %>
+
+<%- include('partials/footer') %>
