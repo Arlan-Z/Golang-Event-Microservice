@@ -43,6 +43,9 @@ func main() {
 
 	cfg := config.Load()
 	sugar.Info("Configuration loaded")
+	sugar.Infof("Database path: %s", cfg.Database.Path)
+	sugar.Infof("Payout service URL: %s", cfg.PayoutService.URL)
+	sugar.Infof("Server port: %s", cfg.HTTPServer.Port)
 	sugar.Infof("Event Source API URL: %s", cfg.EventSourceAPI.URL)
 	sugar.Infof("Event Sync Interval: %s", cfg.EventSourceAPI.SyncInterval)
 
@@ -74,6 +77,7 @@ func main() {
 	eventSyncer := sync_service.NewEventSyncer(
 		eventSourceClient,
 		repositoryStore.Event,
+		eventUseCase,
 		cfg.EventSourceAPI.SyncInterval,
 		logger,
 	)
@@ -130,6 +134,9 @@ func main() {
 		}
 		cancel()
 	}
+
+	// Optional short delay for goroutines to finish
+	// time.Sleep(2 * time.Second)
 
 	if cerr := db.Close(); cerr != nil {
 		sugar.Warnf("Warning: failed to close DB connection: %v", cerr)
