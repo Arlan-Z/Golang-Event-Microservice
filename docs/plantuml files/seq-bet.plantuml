@@ -1,0 +1,76 @@
+@startuml Place Bet
+
+title Sequence: Place Bet
+
+actor User
+participant Gateway
+participant App [
+    <<Container>>
+    Betting Service
+]
+participant Database [
+    <<Database>>
+    SQLite
+]
+
+User -> Gateway: POST /api/v1/bets (JSON Body)
+activate Gateway
+Gateway -> App: POST /api/v1/bets (JSON Body)
+activate App
+
+App -> App: Handler.PlaceBet()
+activate App #LightBlue
+App -> App: Validate Request Body
+App -> App: Service.PlaceBet()
+activate App #CornflowerBlue
+App -> App: UseCase.PlaceBet()
+activate App #DarkSeaGreen
+
+App -> App: Repository.FindByID(eventID) ' Check Event Status & Get Odds
+activate App #IndianRed
+App -> Database: SELECT ... FROM events WHERE id=?
+activate Database
+Database --> App: Event Data (or nil)
+deactivate Database
+App --> App: *data.Event
+deactivate App #IndianRed
+
+alt Event is Active and Found
+    App -> App: Create Bet Object (record odds)
+    App -> App: Repository.Save(bet)
+    activate App #IndianRed
+    App -> Database: INSERT INTO bets (...) VALUES (...)
+    activate Database
+    Database --> App: OK / Error
+    deactivate Database
+    App --> App: nil / Error
+    deactivate App #IndianRed
+
+    alt Save Successful
+        App --> App: *data.Bet
+        deactivate App #DarkSeaGreen
+        App --> App: *data.Bet
+        deactivate App #CornflowerBlue
+        App -> App: MapBetToDTO()
+        App --> Gateway: 201 Created (BetDTO)
+    else Save Failed
+        App --> App: ErrSavingBetFailed
+        deactivate App #DarkSeaGreen
+        App --> App: ErrSavingBetFailed
+        deactivate App #CornflowerBlue
+        App --> Gateway: 500 Internal Server Error
+    end alt
+else Event Not Found or Not Active
+    App --> App: ErrEventNotFound / ErrEventNotActive
+    deactivate App #DarkSeaGreen
+    App --> App: ErrEventNotFound / ErrEventNotActive
+    deactivate App #CornflowerBlue
+    App --> Gateway: 404 Not Found / 409 Conflict
+end alt
+
+deactivate App #LightBlue
+deactivate App
+Gateway --> User: Response (201, 404, 409, 500)
+deactivate Gateway
+
+@enduml
