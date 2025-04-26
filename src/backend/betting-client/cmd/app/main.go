@@ -78,6 +78,7 @@ func main() {
 		eventSourceClient,
 		repositoryStore.Event,
 		eventUseCase,
+		betUseCase,
 		cfg.EventSourceAPI.SyncInterval,
 		logger,
 	)

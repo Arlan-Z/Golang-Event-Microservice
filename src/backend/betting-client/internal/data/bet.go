@@ -5,11 +5,12 @@ import "time"
 type BetStatus string
 
 const (
-	StatusPending BetStatus = "Pending"
-	StatusWon     BetStatus = "Won"
-	StatusLost    BetStatus = "Lost"
-	StatusPaid    BetStatus = "Paid"
-	StatusFailed  BetStatus = "Failed"
+	StatusPending  BetStatus = "Pending"
+	StatusWon      BetStatus = "Won"
+	StatusLost     BetStatus = "Lost"
+	StatusPaid     BetStatus = "Paid"
+	StatusFailed   BetStatus = "Failed"
+	StatusCanceled BetStatus = "Canceled"
 )
 
 type Bet struct {

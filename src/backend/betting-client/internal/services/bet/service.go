@@ -9,6 +9,7 @@ import (
 
 type BetUseCase interface {
 	PlaceBet(ctx context.Context, req data.PlaceBetRequest) (*data.Bet, error)
+	CancelBetsForEvent(ctx context.Context, eventID string) error
 }
 
 type Service interface {

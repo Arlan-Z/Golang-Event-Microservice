@@ -2,12 +2,16 @@ package sync
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/Arlan-Z/def-betting-api/internal/app/store"
 	"github.com/Arlan-Z/def-betting-api/internal/data"
 	eventsource "github.com/Arlan-Z/def-betting-api/internal/deliveries/eventsource/http"
 
+	// Import usecase packages if specific exported errors need checking by type
+	// betuc "github.com/Arlan-Z/def-betting-api/internal/usecases/bet"
 	// eventuc "github.com/Arlan-Z/def-betting-api/internal/usecases/event"
 	"go.uber.org/zap"
 )
@@ -16,10 +20,15 @@ type eventFinalizerUseCase interface {
 	FinalizeEvent(ctx context.Context, eventID string, actualResult data.Outcome) error
 }
 
+type betCancellerUseCase interface {
+	CancelBetsForEvent(ctx context.Context, eventID string) error
+}
+
 type EventSyncer struct {
 	sourceClient eventsource.EventSourceClient
 	eventRepo    store.EventRepository
 	eventUseCase eventFinalizerUseCase
+	betUseCase   betCancellerUseCase
 	syncInterval time.Duration
 	logger       *zap.Logger
 }
@@ -27,14 +36,16 @@ type EventSyncer struct {
 func NewEventSyncer(
 	sc eventsource.EventSourceClient,
 	er store.EventRepository,
-	uc eventFinalizerUseCase,
+	euc eventFinalizerUseCase,
+	buc betCancellerUseCase,
 	interval time.Duration,
 	logger *zap.Logger,
 ) *EventSyncer {
 	return &EventSyncer{
 		sourceClient: sc,
 		eventRepo:    er,
-		eventUseCase: uc,
+		eventUseCase: euc,
+		betUseCase:   buc,
 		syncInterval: interval,
 		logger:       logger.Named("EventSyncer"),
 	}
@@ -74,6 +85,8 @@ func (s *EventSyncer) runSync(ctx context.Context) {
 	errorCount := 0
 	finalizeAttempts := 0
 	finalizeErrors := 0
+	cancelAttempts := 0
+	cancelErrors := 0
 
 	for _, extEvent := range externalEvents {
 		eventLog := log.With(zap.String("externalId", extEvent.APIEventID))
@@ -107,9 +120,8 @@ func (s *EventSyncer) runSync(ctx context.Context) {
 			finalizeErr := s.eventUseCase.FinalizeEvent(ctx, internalEvent.ID, finalizationResult)
 
 			if finalizeErr != nil {
-				// TODO: Check if ErrEventAlreadyFinalized is exported from usecase pkg
-				// if errors.Is(finalizeErr, eventuc.ErrEventAlreadyFinalized) { ... }
-				if finalizeErr.Error() == "The event has already been completed" { // Fallback check by string
+				// TODO: Check if eventuc.ErrEventAlreadyFinalized is exported and use errors.Is
+				if finalizeErr.Error() == "событие уже завершено" { // Fallback check by string
 					eventLog.Info("Finalization attempt skipped: event already finalized locally.")
 				} else {
 					eventLog.Error("Error occurred during finalization triggered by syncer", zap.Error(finalizeErr))
@@ -121,8 +133,18 @@ func (s *EventSyncer) runSync(ctx context.Context) {
 		} else if !internalEvent.IsActive && internalEvent.EventResult == nil {
 			eventLog.Info("Event detected as inactive without specific result (Canceled or ended)", zap.Stringp("apiResult", extEvent.Result))
 			if extEvent.Result != nil && *extEvent.Result == "Canceled" {
-				// TODO: Add cancellation logic for bets
-				eventLog.Warn("Cancellation logic for bets is not implemented yet.")
+				eventLog.Info("Event result is 'Canceled', attempting to cancel related bets.")
+				cancelAttempts++
+				cancelErr := s.betUseCase.CancelBetsForEvent(ctx, internalEvent.ID)
+				if cancelErr != nil && !errors.Is(cancelErr, sql.ErrNoRows) { // Ignore no rows found error
+					// TODO: Check if betuc.ErrBetCancellationFailed is exported and use errors.Is
+					eventLog.Error("Error occurred during bet cancellation for canceled event", zap.Error(cancelErr))
+					cancelErrors++
+				} else if cancelErr == nil {
+					eventLog.Info("Bets cancellation process initiated successfully for canceled event.")
+				} else { // It was sql.ErrNoRows
+					eventLog.Info("No pending bets found to cancel for canceled event.")
+				}
 			}
 		}
 	}
@@ -133,5 +155,7 @@ func (s *EventSyncer) runSync(ctx context.Context) {
 		zap.Int("mapping/upsert_errors", errorCount),
 		zap.Int("finalize_attempts", finalizeAttempts),
 		zap.Int("finalize_errors", finalizeErrors),
+		zap.Int("cancel_attempts", cancelAttempts),
+		zap.Int("cancel_errors", cancelErrors),
 	)
 }

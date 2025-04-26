@@ -6,15 +6,18 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Arlan-Z/def-betting-api/internal/data" // Change path
+	"database/sql"
+
+	"github.com/Arlan-Z/def-betting-api/internal/data"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
 var (
-	ErrEventNotFound   = errors.New("event for betting not found")
-	ErrEventNotActive  = errors.New("event is inactive or has already ended, betting is not possible")
-	ErrSavingBetFailed = errors.New("failed to save bet")
+	ErrEventNotFound         = errors.New("event for betting not found")
+	ErrEventNotActive        = errors.New("event is inactive or has already ended, betting is not possible")
+	ErrSavingBetFailed       = errors.New("failed to save bet")
+	ErrBetCancellationFailed = errors.New("couldn't cancel one or more bets")
 )
 
 type EventRepository interface {
@@ -23,6 +26,8 @@ type EventRepository interface {
 
 type BetRepository interface {
 	Save(ctx context.Context, bet *data.Bet) error
+	FindPendingByEventID(ctx context.Context, eventID string) ([]data.Bet, error)
+	UpdateStatus(ctx context.Context, betID string, status data.BetStatus) error
 }
 
 type UseCase struct {
@@ -88,4 +93,46 @@ func (uc *UseCase) PlaceBet(ctx context.Context, req data.PlaceBetRequest) (*dat
 
 	log.Info("Bet placed successfully", zap.String("betId", newBet.ID))
 	return newBet, nil
+}
+
+func (uc *UseCase) CancelBetsForEvent(ctx context.Context, eventID string) error {
+	log := uc.logger.With(zap.String("eventId", eventID), zap.String("operation", "CancelBetsForEvent"))
+	log.Info("Use Case: Attempt to cancel bets for an event")
+
+	pendingBets, err := uc.betRepo.FindPendingByEventID(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Info("No pending bids were found to cancel")
+			return nil
+		}
+		log.Error("Error searching for pending bids to cancel", zap.Error(err))
+		return fmt.Errorf("internal error when searching for bids to cancel")
+	}
+
+	if len(pendingBets) == 0 {
+		log.Info("No pending bids were found to cancel")
+		return nil
+	}
+
+	log.Info("Found pending bids to cancel", zap.Int("count", len(pendingBets)))
+
+	var cancellationErrors []error
+	canceledCount := 0
+	for _, bet := range pendingBets {
+		err := uc.betRepo.UpdateStatus(ctx, bet.ID, data.StatusCanceled)
+		if err != nil {
+			log.Error("Error updating the status of the Cancelled bet", zap.String("betId", bet.ID), zap.Error(err))
+			cancellationErrors = append(cancellationErrors, fmt.Errorf("bet %s: %w", bet.ID, err))
+		} else {
+			canceledCount++
+		}
+	}
+
+	if len(cancellationErrors) > 0 {
+		log.Error("Errors occurred during the cancellation of bets", zap.Int("total", len(pendingBets)), zap.Int("canceled", canceledCount), zap.Int("errors", len(cancellationErrors)))
+		return fmt.Errorf("%w: %d bets couldn't be cancelled", ErrBetCancellationFailed, len(cancellationErrors))
+	}
+
+	log.Info("All pending bids have been successfully cancelled", zap.Int("count", canceledCount))
+	return nil
 }
