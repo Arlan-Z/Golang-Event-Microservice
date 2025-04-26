@@ -130,7 +130,7 @@ func (uc *UseCase) CancelBetsForEvent(ctx context.Context, eventID string) error
 
 	if len(cancellationErrors) > 0 {
 		log.Error("Errors occurred during the cancellation of bets", zap.Int("total", len(pendingBets)), zap.Int("canceled", canceledCount), zap.Int("errors", len(cancellationErrors)))
-		return fmt.Errorf("%w: %d bets couldn't be cancelled", ErrBetCancellationFailed, len(cancellationErrors))
+		return fmt.Errorf("%w: %d bets failed to cancel", ErrBetCancellationFailed, len(cancellationErrors))
 	}
 
 	log.Info("All pending bids have been successfully cancelled", zap.Int("count", canceledCount))
