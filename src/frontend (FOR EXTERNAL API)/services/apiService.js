@@ -43,14 +43,15 @@ const getEventById = async (id) => {
 
 const createEvent = async (eventData) => {
     // Ensure required fields have sensible defaults if not provided
+    const typeAsInt = eventData.type !== undefined ? parseInt(eventData.type, 10) : 0;
     const payload = {
         eventName: eventData.eventName || 'Unnamed Event',
-        type: eventData.type || 0, // Assuming 0 maps to 'Other' or a default Enum value
+        type: typeAsInt, // Assuming 0 maps to 'Other' or a default Enum value
         homeTeam: eventData.homeTeam || 'Home Team',
         awayTeam: eventData.awayTeam || 'Away Team',
         eventStartDate: eventData.eventStartDate || new Date().toISOString(),
         eventEndDate: eventData.eventEndDate || new Date().toISOString(),
-        eventSubscribers: [] // Subscribers usually added later
+        // eventSubscribers: [] // Subscribers usually added later
     };
     try {
         const response = await apiClient.post('/Events/create', payload);
