@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -28,7 +29,7 @@ func (r *EventRepository) FindActiveEvents(ctx context.Context) ([]data.Event, e
 	now := time.Now().UTC()
 	err := r.db.SelectContext(ctx, &events, query, now)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return events, nil
 		}
 		return nil, fmt.Errorf("error querying active events: %w", err)
@@ -44,7 +45,7 @@ func (r *EventRepository) FindByID(ctx context.Context, eventID string) (*data.E
 
 	err := r.db.GetContext(ctx, &event, query, eventID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("error querying event by ID %s: %w", eventID, err)
@@ -63,8 +64,10 @@ func (r *EventRepository) UpdateResultAndStatus(ctx context.Context, eventID str
 
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
+		// Log warning or handle differently if needed
 		fmt.Printf("Warning: failed to get rows affected while updating event %s: %v\n", eventID, err)
 	} else if rowsAffected == 0 {
+		// Log warning or handle differently if needed
 		fmt.Printf("Warning: Update result affected 0 rows for event %s (possibly already inactive or not found)\n", eventID)
 	}
 
@@ -74,7 +77,7 @@ func (r *EventRepository) UpdateResultAndStatus(ctx context.Context, eventID str
 func (r *EventRepository) Upsert(ctx context.Context, event *data.Event) error {
 	query := `
         INSERT INTO events (id, event_name, home_team, away_team, home_win_chance, away_win_chance, draw_chance, event_start_date, event_end_date, event_result, type, is_active)
-        VALUES (:id, :event_name, :home_team, :away_team, :home_win_chance, :away_win_chance, :draw_chance, :event_start_date, :event_end_date, :event_result, :type, :is_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             event_name = excluded.event_name,
             home_team = excluded.home_team,
@@ -87,12 +90,23 @@ func (r *EventRepository) Upsert(ctx context.Context, event *data.Event) error {
             event_result = excluded.event_result,
             type = excluded.type,
             is_active = excluded.is_active
-		WHERE events.is_active = 1 -- Опционально: Обновлять только если событие еще не завершено в нашей базе? Зависит от логики.
-		  -- OR events.event_result IS NULL -- Можно обновлять коэффициенты завершенного, но не результат?
     `
-	_, err := r.db.NamedExecContext(ctx, query, event)
+	_, err := r.db.ExecContext(ctx, query,
+		event.ID,
+		event.EventName,
+		event.HomeTeam,
+		event.AwayTeam,
+		event.HomeWinChance,
+		event.AwayWinChance,
+		event.DrawChance,
+		event.EventStartDate,
+		event.EventEndDate,
+		event.EventResult,
+		event.Type,
+		event.IsActive,
+	)
 	if err != nil {
-		return fmt.Errorf("ошибка upsert события %s: %w", event.ID, err)
+		return fmt.Errorf("error upserting event %s: %w", event.ID, err)
 	}
 	return nil
 }

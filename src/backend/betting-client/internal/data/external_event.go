@@ -43,37 +43,55 @@ func MapExternalToInternalEvent(ext ExternalEventDTO) (Event, error) {
 	}
 
 	const timeLayout = "2006-01-02T15:04:05"
-
 	startTime, err := time.Parse(timeLayout, ext.StartsAt)
 	if err != nil {
-		return Event{}, fmt.Errorf("failed to parse eventStartDate '%s': %w", ext.StartsAt, err)
+		return Event{}, fmt.Errorf("не удалось распарсить eventStartDate '%s': %w", ext.StartsAt, err)
 	}
 	internalEvent.EventStartDate = startTime.UTC()
 
 	endTime, err := time.Parse(timeLayout, ext.EndsAt)
 	if err != nil {
-		return Event{}, fmt.Errorf("failed to parse eventEndDate '%s': %w", ext.EndsAt, err)
+		return Event{}, fmt.Errorf("не удалось распарсить eventEndDate '%s': %w", ext.EndsAt, err)
 	}
 	internalEvent.EventEndDate = endTime.UTC()
 
+	makeInactive := false
+
 	if ext.Result != nil && *ext.Result != "" {
-		var outcome Outcome
+		var outcome *Outcome
+
 		switch *ext.Result {
 		case "HomeWin":
-			outcome = HomeWin
+			res := HomeWin
+			outcome = &res
+			makeInactive = true
 		case "AwayWin":
-			outcome = AwayWin
+			res := AwayWin
+			outcome = &res
+			makeInactive = true
 		case "Draw":
-			outcome = Draw
+			res := Draw
+			outcome = &res
+			makeInactive = true
+		case "Canceled":
+			makeInactive = true
+		case "Pending":
+			break
 		default:
 			return Event{}, fmt.Errorf("unknown eventResult format '%s'", *ext.Result)
 		}
-		internalEvent.EventResult = &outcome
-		internalEvent.IsActive = false
+
+		if outcome != nil {
+			internalEvent.EventResult = outcome
+		}
 	}
 
-	if internalEvent.EventResult == nil && time.Now().UTC().After(internalEvent.EventEndDate) {
+	if makeInactive {
 		internalEvent.IsActive = false
+	} else {
+		if time.Now().UTC().After(internalEvent.EventEndDate) {
+			internalEvent.IsActive = false
+		}
 	}
 
 	return internalEvent, nil

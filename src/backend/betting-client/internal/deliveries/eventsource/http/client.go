@@ -50,7 +50,7 @@ func NewRestyEventSourceClient(baseURL string, timeout time.Duration, logger *za
 }
 
 func (c *RestyEventSourceClient) FetchActiveEvents(ctx context.Context) ([]data.ExternalEventDTO, error) {
-	endpoint := "/api/v1/events/active"
+	endpoint := "/api/events/all"
 
 	req := c.client.R().SetContext(ctx)
 
