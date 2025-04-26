@@ -1,0 +1,109 @@
+<%- include('partials/header', { title: 'Active Betting Events' }) %> <%# Pass title if header supports it %>
+
+<h1>Active Betting Events</h1>
+
+<%# Placeholder for User ID - In a real app, this would come from login/session %>
+<div class="user-id-input" style="margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9;">
+    <label for="globalUserId" style="font-weight: bold;">Enter Your User ID (UUID):</label>
+    <input type="text" id="globalUserId" name="userId" placeholder="e.g., a1b2c3d4-e5f6-7890-1234-567890abcdef" style="width: 350px; margin-left: 10px;" required
+           pattern="^[0-9a-f]{8}-[0-9a-f]{4}-[4][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" title="Please enter a valid UUID v4">
+    <small style="display: block; margin-top: 5px;">(This ID will be used for all bets placed on this page)</small>
+</div>
+
+
+<% if (events && events.length > 0) { %>
+    <div class="event-list">
+        <% events.forEach(event => { %>
+            <div class="event-card" style="border: 1px solid #eee; padding: 15px; margin-bottom: 15px; background-color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <h2><%= event.eventName %> (<%= event.homeTeam %> vs <%= event.awayTeam %>)</h2>
+                <p><strong>ID:</strong> <%= event.id %></p>
+                <p><strong>Starts:</strong> <%= new Date(event.eventStartDate).toLocaleString() %></p>
+                <p>
+                    <strong>Odds:</strong>
+                    Home Win: <%= event.homeWinChance?.toFixed(4) ?? 'N/A' %> |
+                    Draw: <%= event.drawChance?.toFixed(4) ?? 'N/A' %> |
+                    Away Win: <%= event.awayWinChance?.toFixed(4) ?? 'N/A' %>
+                </p>
+
+                <hr>
+
+                <%# --- Place Bet Form --- %>
+                <div class="bet-form">
+                    <h3>Place Your Bet</h3>
+                    <form action="/betting/bets" method="POST" onsubmit="return copyUserId(this);">
+                        <input type="hidden" name="eventId" value="<%= event.id %>">
+                        <%# Hidden field to be populated by JS %>
+                        <input type="hidden" name="userId" value="">
+
+                        <div class="form-group">
+                            <label for="amount_<%= event.id %>">Amount:</label>
+                            <input type="number" id="amount_<%= event.id %>" name="amount" step="0.01" min="0.01" required style="width: 100px;">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Predicted Outcome:</label>
+                            <input type="radio" id="home_<%= event.id %>" name="predictedOutcome" value="HomeWin" required>
+                            <label for="home_<%= event.id %>">Home Win</label>
+
+                            <input type="radio" id="draw_<%= event.id %>" name="predictedOutcome" value="Draw">
+                            <label for="draw_<%= event.id %>">Draw</label>
+
+                            <input type="radio" id="away_<%= event.id %>" name="predictedOutcome" value="AwayWin">
+                            <label for="away_<%= event.id %>">Away Win</label>
+                        </div>
+                        <button type="submit" class="btn">Place Bet</button>
+                    </form>
+                </div>
+
+                <hr>
+
+                 <%# --- Finalize Event Form (Manual Override) --- %>
+                 <div class="finalize-form" style="margin-top: 15px;">
+                    <h4 style="color: #d9534f;">Manual Finalization</h4>
+                     <form action="/betting/events/<%= event.id %>/finalize?_method=POST" method="POST" onsubmit="return confirm('Are you sure you want to manually finalize this event? This cannot be undone.');">
+                         <div class="form-group">
+                             <label for="result_<%= event.id %>">Set Actual Result:</label>
+                             <select id="result_<%= event.id %>" name="result" required>
+                                 <option value="">-- Select Result --</option>
+                                 <option value="HomeWin">Home Win</option>
+                                 <option value="AwayWin">Away Win</option>
+                                 <option value="Draw">Draw</option>
+                             </select>
+                         </div>
+                         <button type="submit" class="btn btn-warning">Finalize Event</button> <%# Use warning style %>
+                     </form>
+                 </div>
+
+            </div> <%# End event-card %>
+        <% }); %>
+    </div> <%# End event-list %>
+
+    <%# Simple JS to copy the global User ID into the hidden field before submitting bet %>
+    <script>
+        function copyUserId(formElement) {
+            const globalUserIdInput = document.getElementById('globalUserId');
+            const hiddenUserIdInput = formElement.querySelector('input[name="userId"]');
+            if (!globalUserIdInput || !hiddenUserIdInput) {
+                console.error("Could not find User ID inputs.");
+                alert("Error: Could not find User ID inputs.");
+                return false; // Prevent submission
+            }
+            const userIdValue = globalUserIdInput.value.trim();
+            // Basic check if it looks like a UUID - enhance if needed
+             const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (!userIdValue || !uuidRegex.test(userIdValue)) {
+                 alert('Please enter a valid User ID (UUID format) in the field at the top of the page before placing a bet.');
+                 globalUserIdInput.focus();
+                 return false; // Prevent submission
+            }
+            hiddenUserIdInput.value = userIdValue;
+            return true; // Allow submission
+        }
+    </script>
+
+<% } else { %>
+    <p>No active events found to bet on.</p>
+<% } %>
+
+
+<%- include('partials/footer') %>
