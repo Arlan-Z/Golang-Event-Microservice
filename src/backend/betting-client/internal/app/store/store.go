@@ -14,6 +14,7 @@ type EventRepository interface {
 	FindActiveEvents(ctx context.Context) ([]data.Event, error)
 	FindByID(ctx context.Context, eventID string) (*data.Event, error)
 	UpdateResultAndStatus(ctx context.Context, eventID string, result data.Outcome) error
+	Upsert(ctx context.Context, event *data.Event) error
 }
 
 type BetRepository interface {

@@ -20,6 +20,11 @@ type Config struct {
 		URL     string        `yaml:"url" env:"PAYOUT_SVC_URL" env-required:"true"`
 		Timeout time.Duration `yaml:"timeout" env:"PAYOUT_SVC_TIMEOUT" env-default:"3s"`
 	} `yaml:"payout_service"`
+	EventSourceAPI struct { // <-- Новый раздел
+		URL          string        `yaml:"url" env:"EVENT_SOURCE_URL" env-required:"true"`
+		Timeout      time.Duration `yaml:"timeout" env:"EVENT_SOURCE_TIMEOUT" env-default:"10s"`
+		SyncInterval time.Duration `yaml:"sync_interval" env:"EVENT_SYNC_INTERVAL" env-default:"5m"`
+	} `yaml:"event_source_api"`
 }
 
 func Load() *Config {

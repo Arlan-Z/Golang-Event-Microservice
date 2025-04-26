@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Arlan-Z/def-betting-api/internal/data" // Change path
+	"github.com/Arlan-Z/def-betting-api/internal/data"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -68,5 +68,31 @@ func (r *EventRepository) UpdateResultAndStatus(ctx context.Context, eventID str
 		fmt.Printf("Warning: Update result affected 0 rows for event %s (possibly already inactive or not found)\n", eventID)
 	}
 
+	return nil
+}
+
+func (r *EventRepository) Upsert(ctx context.Context, event *data.Event) error {
+	query := `
+        INSERT INTO events (id, event_name, home_team, away_team, home_win_chance, away_win_chance, draw_chance, event_start_date, event_end_date, event_result, type, is_active)
+        VALUES (:id, :event_name, :home_team, :away_team, :home_win_chance, :away_win_chance, :draw_chance, :event_start_date, :event_end_date, :event_result, :type, :is_active)
+        ON CONFLICT(id) DO UPDATE SET
+            event_name = excluded.event_name,
+            home_team = excluded.home_team,
+            away_team = excluded.away_team,
+            home_win_chance = excluded.home_win_chance,
+            away_win_chance = excluded.away_win_chance,
+            draw_chance = excluded.draw_chance,
+            event_start_date = excluded.event_start_date,
+            event_end_date = excluded.event_end_date,
+            event_result = excluded.event_result,
+            type = excluded.type,
+            is_active = excluded.is_active
+		WHERE events.is_active = 1 -- Опционально: Обновлять только если событие еще не завершено в нашей базе? Зависит от логики.
+		  -- OR events.event_result IS NULL -- Можно обновлять коэффициенты завершенного, но не результат?
+    `
+	_, err := r.db.NamedExecContext(ctx, query, event)
+	if err != nil {
+		return fmt.Errorf("ошибка upsert события %s: %w", event.ID, err)
+	}
 	return nil
 }
