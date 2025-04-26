@@ -1,0 +1,12 @@
+http_server:
+  port: "8080"
+  timeout: "5s"
+database:
+  path: "./data/events.db" 
+payout_service:
+  url: "http://localhost:8081"
+  timeout: "3s"
+event_source_api:             
+  url: "https://arlan-api.azurewebsites.net" 
+  timeout: "10s"
+  sync_interval: "1m"         

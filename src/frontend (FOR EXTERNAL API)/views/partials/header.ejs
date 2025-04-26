@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Betting Event Manager</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav>
+        <a href="/">Home (All Events)</a> |
+        <a href="/events/new">Create New Event</a>
+    </nav>
+    <main class="container">
+        <% if (typeof message !== 'undefined' && message) { %>
+          <div class="message <%= typeof messageType !== 'undefined' ? messageType : 'info' %>">
+            <%= message %>
+          </div>
+        <% } %>
