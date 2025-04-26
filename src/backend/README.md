@@ -1,151 +1,138 @@
-# Сервис Событий и Ставок
+# Go Event & Betting Microservice
 
-Микросервис на Go, предназначенный для управления событиями для ставок, приема ставок от пользователей и обработки выплат при завершении событий путем уведомления внешнего сервиса выплат. Сервис также синхронизирует данные о событиях из внешнего API.
+[![Go Report Card](https://goreportcard.com/badge/github.com/Arlan-Z/Golang-Event-Microservice)](https://goreportcard.com/report/github.com/Arlan-Z/Golang-Event-Microservice)
+<!-- Добавьте другие значки по желанию (лицензия, сборка и т.д.) -->
 
-## Основные возможности
+This Go microservice manages betting events, allows users to place bets, processes payouts upon event finalization, and synchronizes event data from an external API source.
 
-*   Отображение списка активных событий, доступных для ставок.
-*   Прием ставок на активные события с записью коэффициентов на момент ставки.
-*   Завершение событий на основе предоставленного результата (вручную через API или автоматически при синхронизации).
-*   Расчет выигрышных ставок на основе записанных коэффициентов.
-*   Уведомление внешнего сервиса выплат о выигрышных ставках.
-*   Периодическая синхронизация списка и статуса событий из внешнего API.
-*   Проверка состояния сервиса (Liveness и Readiness пробы).
+## Features
 
-## Предварительные требования
+*   **Event Listing:** Displays currently active events available for betting (fetched from a local cache updated periodically).
+*   **Bet Placement:** Allows users to place bets on active events, recording the odds at the time of the bet.
+*   **Event Synchronization:** Periodically fetches event data (including status and results) from a configured external API and updates the local database.
+*   **Automatic Finalization:** Automatically triggers bet calculation and payout notifications when an event's result (Win/Loss/Draw) is detected during synchronization.
+*   **Manual Finalization:** Provides an API endpoint to manually trigger event finalization.
+*   **Bet Cancellation:** Automatically cancels pending bets for events marked as "Canceled" by the external API source.
+*   **Payout Notification:** Notifies a configured external payout service about winning bets.
+*   **Health Checks:** Includes `/healthz` (liveness) and `/readyz` (readiness) probes.
+*   **Structured Logging:** Uses `zap` for structured logging.
+*   **Configuration:** Flexible configuration via `config.yaml` and environment variables.
+*   **Database Migrations:** Manages database schema using `golang-migrate`.
 
-*   **Go:** Версия 1.18 или выше.
-*   **Git:** Для клонирования репозитория и загрузки зависимостей.
-*   **SQLite3:** Сервис использует SQLite. Убедитесь, что библиотека `sqlite3` доступна, если вы планируете взаимодействовать с БД напрямую или запускать утилиту миграций локально.
-*   **golang-migrate CLI (Опционально, но рекомендуется):** Для управления изменениями схемы БД. Инструкции по установке: [golang-migrate installation](https://github.com/golang-migrate/migrate/tree/master/cmd/migrate)
+## Prerequisites
 
-## Начало работы
+*   **Go:** Version 1.18 or higher.
+*   **Git:** For cloning the repository.
+*   **SQLite3 Library:** Ensure the necessary build tools (like gcc/clang) are installed for the CGo dependency required by `mattn/go-sqlite3`. The library itself is managed by Go modules.
+*   **golang-migrate CLI (Optional but Recommended):** For easier database schema management. [Installation Guide](https://github.com/golang-migrate/migrate/tree/master/cmd/migrate).
 
-1.  **Клонируйте репозиторий:**
+## Getting Started
+
+1.  **Clone the Repository:**
     ```bash
-    # Замените <your-repository-url> на URL вашего репозитория
-    git clone <your-repository-url>
-    cd <имя-папки-репозитория> # e.g., cd def-betting-api
+    git clone https://github.com/Arlan-Z/Golang-Event-Microservice.git
+    cd Golang-Event-Microservice
     ```
 
-2.  **Приватные зависимости (Если применимо):**
-    *Этот раздел необходим, только если проект использует приватные Go модули, размещенные на вашем `gitlab.frhc.one`.*
-    *   Убедитесь, что ваш SSH ключ настроен для доступа к GitLab без пароля:
-        ```bash
-        ssh -T git@gitlab.frhc.one
-        # Ответ должен быть "Welcome to GitLab, @your-username!" без запроса пароля.
-        ```
-    *   Настройте Go для использования SSH для вашего хоста с приватными репозиториями:
-        ```bash
-        go env -w GOPRIVATE=gitlab.frhc.one/*
-        ```
-    *   Настройте Git для замены HTTPS URL на SSH для приватного хоста. Добавьте следующее в ваш глобальный `~/.gitconfig` (или локальный `.git/config` проекта):
-        ```git
-        [url "ssh://git@gitlab.frhc.one/"]
-            insteadOf = https://gitlab.frhc.one/
-        ```
-
-3.  **Установите зависимости:**
-    Загрузите необходимые Go модули.
+2.  **Install Dependencies:**
+    Fetch and install the required Go modules.
     ```bash
     go mod tidy
-    # или
+    # or
     go mod download
     ```
 
-## Конфигурация
+## Configuration
 
-Сервис настраивается с помощью файла `config.yaml` в корне проекта и/или через переменные окружения. Переменные окружения имеют приоритет над значениями из файла.
+The service uses a `config.yaml` file in the project root and/or environment variables (environment variables override file values).
 
-Создайте файл `config.yaml` в корне проекта:
+Create `config.yaml` in the root directory:
 
 ```yaml
 # config.yaml
 http_server:
-  port: "8080"         # Порт, на котором слушает сервис
-  timeout: "5s"        # Таймаут чтения HTTP запроса
+  port: "8080"         # Port the service listens on (Env: HTTP_PORT)
+  timeout: "5s"        # Request Read Timeout (Env: HTTP_TIMEOUT)
 
 database:
-  path: "./data/events.db"  # Путь к файлу базы данных SQLite
+  path: "./data/events.db"  # Path to the SQLite database file (Env: DB_PATH) - Ensure './data' directory exists!
 
 payout_service:
-  url: "http://localhost:8081" # Базовый URL внешнего сервиса выплат
-  timeout: "3s"                # Таймаут HTTP клиента для сервиса выплат
+  url: "http://localhost:8081" # Base URL of the external payout service (Env: PAYOUT_SVC_URL) - REQUIRED
+  timeout: "3s"                # HTTP client timeout for the payout service (Env: PAYOUT_SVC_TIMEOUT)
 
-event_source_api:              # API внешнего источника событий
-  url: "http://external-events-api.example.com" # <-- ЗАМЕНИТЕ на URL реального API
-  timeout: "10s"               # Таймаут HTTP клиента для источника событий
-  sync_interval: "5m"          # Интервал синхронизации событий (e.g., 5m, 1h, 30s)
+event_source_api:              # External API for fetching events
+  url: "https://arlan-api.azurewebsites.net" 
+  timeout: "10s"               # HTTP client timeout for the event source API (Env: EVENT_SOURCE_TIMEOUT)
+  sync_interval: "1m"          # How often to sync events (e.g., 1m, 5m, 30s) (Env: EVENT_SYNC_INTERVAL)
 ```
 
-**Основные параметры конфигурации:**
+**Key Configuration Options & Environment Variables:**
 
-*   `HTTP_PORT` / `http_server.port`: Порт HTTP сервера.
-*   `DB_PATH` / `database.path`: Путь к файлу SQLite. **Обязательный.**
-*   `PAYOUT_SVC_URL` / `payout_service.url`: URL сервиса выплат. **Обязательный.**
-*   `PAYOUT_SVC_TIMEOUT` / `payout_service.timeout`: Таймаут для запросов к сервису выплат.
-*   `EVENT_SOURCE_URL` / `event_source_api.url`: URL внешнего API для получения событий. **Обязательный.**
-*   `EVENT_SOURCE_TIMEOUT` / `event_source_api.timeout`: Таймаут для запросов к API событий.
-*   `EVENT_SYNC_INTERVAL` / `event_source_api.sync_interval`: Как часто синхронизировать события.
+*   `http_server.port` / `HTTP_PORT`: Port for the HTTP server.
+*   `database.path` / `DB_PATH`: Filesystem path for the SQLite database. **The directory (`./data/` in the example) must exist.**
+*   `payout_service.url` / `PAYOUT_SVC_URL`: **Required.** Base URL for the payout notification service.
+*   `payout_service.timeout` / `PAYOUT_SVC_TIMEOUT`: Timeout for payout service requests.
+*   `event_source_api.url` / `EVENT_SOURCE_URL`: **Required.** Base URL of the external API providing event data (Your C# service). **Remember to replace the default `http://localhost:5000`**.
+*   `event_source_api.timeout` / `EVENT_SOURCE_TIMEOUT`: Timeout for event source API requests.
+*   `event_source_api.sync_interval` / `EVENT_SYNC_INTERVAL`: Frequency of event synchronization.
 
-## Миграции базы данных
+## Database Migrations
 
-Изменения схемы БД управляются с помощью `golang-migrate`. Файлы миграций находятся в папке `./migrations`.
+Database schema changes are managed using `golang-migrate`. Migration files are in `./migrations`.
 
-Вы можете применять миграции, используя утилиту `golang-migrate` или встроенную утилиту проекта.
-
-**Способ 1: Использование `golang-migrate` CLI (Рекомендуется)**
-
+**Before running migrations:** Ensure the directory specified in `database.path` (e.g., `./data/`) exists.
 ```bash
-# Убедитесь, что migrate CLI установлен
-# Применить все ожидающие 'up' миграции:
-# ВАЖНО: Укажите ПРАВИЛЬНЫЙ путь к БД из вашего config.yaml!
+mkdir -p ./data
+```
+
+**Run Migrations using one of the methods:**
+
+**Method 1: `golang-migrate` CLI (Recommended)**
+```bash
+# Apply all pending 'up' migrations (use the DB path from your config):
 migrate -database 'sqlite3://./data/events.db' -path ./migrations up
 
-# Откатить последнюю примененную миграцию:
-migrate -database 'sqlite3://./data/events.db' -path ./migrations down 1
+# Roll back the last applied migration:
+# migrate -database 'sqlite3://./data/events.db' -path ./migrations down 1
 ```
 
-**Способ 2: Использование встроенной утилиты Go**
-
-Проект включает утилиту для миграций.
-
+**Method 2: Built-in Go Utility**
 ```bash
-# Убедитесь, что папка ./data существует (mkdir data), если нет.
-# Применить все ожидающие 'up' миграции:
-# ВАЖНО: Укажите ПРАВИЛЬНЫЙ путь к БД из вашего config.yaml!
+# Apply all pending 'up' migrations (use the DB path from your config):
 go run ./cmd/migrate/main.go -dbpath ./data/events.db -path ./migrations -direction up
 
-# Откатить все 'down' миграции (используйте с осторожностью):
+# Roll back all 'down' migrations (use with caution):
 # go run ./cmd/migrate/main.go -dbpath ./data/events.db -path ./migrations -direction down
 ```
 
-Файл базы данных (по умолчанию `./data/events.db`) будет создан автоматически при первом запуске миграций или приложения, если он не существует (но родительская папка `./data` должна существовать).
+The database file (e.g., `./data/events.db`) will be created if it doesn't exist.
 
-## Запуск Сервиса
+## Running the Service
 
-1.  **Убедитесь, что конфигурация (`config.yaml`) присутствует и корректна.**
-2.  **Убедитесь, что миграции базы данных применены.**
-3.  **Запустите приложение:**
+1.  **Ensure `config.yaml` is present and correctly configured (especially `event_source_api.url`).**
+2.  **Ensure the database directory exists and migrations have been applied.**
+3.  **Ensure the external Event Source API (your C# service) and Payout Service (if testing payouts) are running and accessible.**
+4.  **Run the application:**
 
     ```bash
-    # Вариант 1: Собрать и запустить
+    # Option 1: Build and run
     go build -o betting_service ./cmd/app/main.go
     ./betting_service
 
-    # Вариант 2: Запустить напрямую
+    # Option 2: Run directly
     go run ./cmd/app/main.go
     ```
 
-Сервис запустится, и в консоль будут выведены логи, указывающие на прослушивание настроенного порта (например, `:8080`) и запуск фонового синхронизатора событий.
+The service will start, log initialization steps, begin synchronizing events from the configured source API, and listen for incoming HTTP requests on the configured port (e.g., `:8080`).
 
-## Взаимодействие с API
+## API Interaction
 
-Все эндпоинты имеют префикс `/api/v1`.
+All API endpoints are prefixed with `/api/v1`.
 
 *   **`GET /api/v1/events`**
-    *   **Описание:** Получает список всех **активных** в данный момент событий, доступных для ставок. Данные берутся из **локальной базы данных**, которая обновляется фоновым синхронизатором.
-    *   **Ответ:** `200 OK` с JSON-массивом объектов событий.
+    *   **Description:** Retrieves a list of currently **active** events available for betting. Data comes from the local database cache, updated by the background syncer.
+    *   **Response:** `200 OK` with a JSON array of `EventDTO` objects. Returns `[]` if no active events are found.
         ```json
         [
           {
@@ -153,98 +140,102 @@ go run ./cmd/migrate/main.go -dbpath ./data/events.db -path ./migrations -direct
             "eventName": "Golang VS C#",
             "homeTeam": "Golang",
             "awayTeam": "C#",
-            "homeWinChance": 0.1309, // Коэффициенты
+            "homeWinChance": 0.1309,
             "awayWinChance": 0.2849,
             "drawChance": 0.5841,
-            "eventStartDate": "2025-04-10T15:47:00Z", // Время в UTC
+            "eventStartDate": "2025-04-10T15:47:00Z", // Time in UTC
             "eventEndDate": "2025-05-04T15:47:00Z",
-            "eventResult": null, // null, т.к. событие активно
+            "eventResult": null, // null because the event is active
             "type": "Other"
           }
-          // ... другие активные события
+          // ... other active events
         ]
         ```
-        *Если активных событий нет, вернется пустой массив `[]`.*
 
 *   **`POST /api/v1/bets`**
-    *   **Описание:** Размещает новую ставку на активное событие.
-    *   **Тело запроса:** JSON объект с деталями ставки.
+    *   **Description:** Places a new bet on an **active** event. Records the current odds at the time the bet is placed.
+    *   **Request Body (JSON):**
         ```json
         {
-          "userId": "user-guid-uuid-format", // Уникальный ID пользователя (формат UUID)
-          "eventId": "event-id-uuid-format", // ID активного события (формат UUID)
-          "amount": 10.50,                   // Сумма ставки (должна быть > 0)
-          "predictedOutcome": "HomeWin"      // Прогнозируемый исход ("HomeWin", "AwayWin", или "Draw")
+          "userId": "valid-uuid-string",   // User's unique identifier (UUID format)
+          "eventId": "event-uuid-string", // ID of an ACTIVE event (UUID format)
+          "amount": 10.50,                // Bet amount (must be > 0)
+          "predictedOutcome": "HomeWin"   // "HomeWin", "AwayWin", or "Draw"
         }
         ```
-    *   **Ответ:**
-        *   `201 Created`: Ставка успешно размещена. Возвращает созданный объект ставки.
-        *   `400 Bad Request`: Некорректное тело запроса или ошибка валидации (например, сумма <= 0, неверный `predictedOutcome`, не UUID).
-        *   `404 Not Found`: Событие с указанным `eventId` не найдено в локальной базе.
-        *   `409 Conflict`: Событие неактивно (уже завершилось или отменено), ставки не принимаются.
-        *   `500 Internal Server Error`: Внутренняя ошибка при сохранении ставки.
+    *   **Response:**
+        *   `201 Created`: Bet successfully placed. Returns the created `BetDTO` object.
+        *   `400 Bad Request`: Invalid request body (bad JSON, validation errors like non-UUIDs, amount <= 0, invalid outcome).
+        *   `404 Not Found`: Event with the given `eventId` not found in the local database.
+        *   `409 Conflict`: Event is not active (already finished, canceled, or not started depending on exact logic).
+        *   `500 Internal Server Error`: Failure saving the bet to the database.
 
 *   **`POST /api/v1/events/{eventID}/finalize`**
-    *   **Описание:** **(Ручной способ)** Завершает событие, запускает расчет ожидающих ставок для него и инициирует отправку уведомлений о выплатах. Используется, если автоматическая синхронизация не сработала или нужно завершить событие вручную.
-    *   **Параметр пути:** `{eventID}` - UUID события для завершения.
-    *   **Тело запроса:** JSON объект с фактическим результатом.
+    *   **Description:** **Manually** triggers the finalization process for a specific event. Calculates pending bets and initiates payout notifications. *This is usually handled automatically by the syncer but can be used as a fallback or for testing.*
+    *   **Path Parameter:** `{eventID}` - UUID of the event to finalize.
+    *   **Request Body (JSON):**
         ```json
         {
-          "result": "AwayWin" // Фактический исход ("HomeWin", "AwayWin", или "Draw")
+          "result": "AwayWin" // The actual outcome: "HomeWin", "AwayWin", or "Draw"
         }
         ```
-    *   **Ответ:**
-        *   `200 OK`: Процесс завершения успешно запущен/завершен (могут быть ошибки с отдельными ставками, см. логи).
-        *   `400 Bad Request`: Недопустимое значение `result`.
-        *   `404 Not Found`: Событие с указанным ID не найдено.
-        *   `409 Conflict`: Событие уже было завершено ранее.
-        *   `500 Internal Server Error`: Ошибка при обработке ставок или уведомлении сервиса выплат. См. логи.
+    *   **Response:**
+        *   `200 OK`: Finalization process completed or successfully initiated (check logs for details, especially if bets failed).
+        *   `400 Bad Request`: Invalid `result` value provided.
+        *   `404 Not Found`: Event with the given ID not found.
+        *   `409 Conflict`: Event was already finalized previously.
+        *   `500 Internal Server Error`: Error during bet processing or payout notification.
 
 *   **`GET /api/v1/healthz`**
-    *   **Описание:** Проверка жизнеспособности (Liveness probe). Показывает, что HTTP сервер запущен и отвечает.
-    *   **Ответ:** `200 OK`
+    *   **Description:** Liveness probe. Indicates if the HTTP server is running.
+    *   **Response:** `200 OK`
 
 *   **`GET /api/v1/readyz`**
-    *   **Описание:** Проверка готовности (Readiness probe). Показывает, что сервис готов принимать трафик (например, есть соединение с базой данных).
-    *   **Ответ:**
-        *   `200 OK`: Сервис готов.
-        *   `503 Service Unavailable`: Сервис не готов (например, не удалось подключиться к БД).
+    *   **Description:** Readiness probe. Indicates if the service is ready to handle traffic (e.g., database connection is available).
+    *   **Response:**
+        *   `200 OK`: Service is ready.
+        *   `503 Service Unavailable`: Service is not ready (e.g., DB ping failed).
 
-## Автоматическое завершение событий
+## Automatic Event Processing (EventSyncer)
 
-Сервис включает фоновый синхронизатор (`EventSyncer`), который периодически выполняет следующие действия:
+The service includes a background worker (`EventSyncer`) that runs periodically (defined by `event_source_api.sync_interval`):
 
-1.  Запрашивает **все** события из внешнего API (по адресу `event_source_api.url` + `/api/Events/all`).
-2.  Обновляет или вставляет полученные события в локальную базу данных SQLite.
-3.  Если синхронизатор обнаруживает, что событие во внешнем API имеет результат (`HomeWin`, `AwayWin`, `Draw`), он **автоматически инициирует процесс финализации** для этого события (вызывает ту же логику, что и `POST /api/v1/events/{eventID}/finalize`).
-4.  Если событие во внешнем API помечено как `Canceled`, синхронизатор помечает его неактивным в локальной базе и **отменяет все ожидающие ставки** на это событие (устанавливает им статус `Canceled`).
+1.  **Fetches All Events:** It calls `GET {event_source_api.url}/api/Events/all` (based on the C# controller).
+2.  **Updates Local DB:** It uses `Upsert` to add new events or update existing event details (name, teams, odds, dates, status) in the local SQLite database.
+3.  **Detects Finalization:** If the fetched data for an event includes a final result (`HomeWin`, `AwayWin`, `Draw`), the syncer automatically calls the internal `EventUseCase.FinalizeEvent` method. This triggers the calculation of winning/losing bets and sends payout notifications, just like the manual API call.
+4.  **Detects Cancellation:** If the fetched data indicates an event is `Canceled`, the syncer marks the event as inactive locally and calls the internal `BetUseCase.CancelBetsForEvent` method to change the status of all pending bets for that event to `Canceled`.
 
-Таким образом, в большинстве случаев вам не нужно вручную вызывать `POST /finalize`, если внешний API корректно обновляет статусы и результаты событий.
+This automation means you generally don't need to manually call the `/finalize` endpoint if your external event source API reliably updates event statuses and results.
 
-## Структура Проекта
+## Project Structure
 
-Проект следует стандартной структуре Go-сервисов:
+The project follows a standard Go layered architecture:
 
-*   `cmd/`: Точки входа приложений.
-    *   `app/`: Запуск основного сервиса.
-    *   `migrate/`: Утилита миграций.
-*   `internal/`: Приватный код приложения.
-    *   `app/`: Настройка ядра приложения (конфиг, соединения, запуск, хранилище).
-    *   `data/`: Структуры данных (модели БД, DTO).
-    *   `deliveries/`: Обработчики входящих запросов (HTTP) и клиенты для внешних сервисов.
-    *   `pkg/`: Внутренние общие библиотеки (валидатор).
-    *   `repositories/`: Слой доступа к данным (реализации для SQLite).
-    *   `services/`: Сервисный слой (промежуточный слой между доставкой и use cases).
-    *   `usecases/`: Слой бизнес-логики (сценарии использования).
-*   `migrations/`: Файлы миграций SQL.
-*   `pkg/`: Публичные общие библиотеки (если есть).
-*   `config.yaml`: Файл конфигурации.
-*   `go.mod`, `go.sum`: Файлы модулей Go.
+*   `cmd/`: Application entry points (`app` for the service, `migrate` for DB utility).
+*   `internal/`: Private application code.
+    *   `app/`: Core application setup (config, connections, startup, store).
+    *   `data/`: Data structures (DB models, API DTOs).
+    *   `deliveries/`: Adapters for input/output (HTTP handlers, external API clients).
+    *   `pkg/`: Internal shared utility packages (validator).
+    *   `repositories/`: Data access layer (SQLite implementations).
+    *   `services/`: Service layer coordinating between delivery and use cases.
+    *   `usecases/`: Core business logic.
+    *   `sync/`: Background worker logic (EventSyncer).
+*   `migrations/`: SQL database migration files.
+*   `config.yaml`: Default configuration file.
+*   `go.mod`, `go.sum`: Go module definition files.
 
-## Тестирование
+## Testing
 
-Запустите тесты стандартной командой Go:
+Unit and integration tests are included. Run tests using the standard Go command from the project root:
 
 ```bash
 go test ./...
 ```
+
+Tests cover:
+*   Repository interactions with a test SQLite database.
+*   Use case business logic using mocked dependencies.
+*   HTTP handler responses using `httptest`.
+
+---
