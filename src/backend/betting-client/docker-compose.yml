@@ -11,7 +11,7 @@ services:
       - betting_network
     volumes:
       - .:/app
-      - ./app-data:/app/data
+      - ./data:/app/data 
     working_dir: /app 
     command: ["go", "run", "./cmd/migrate/main.go", "-dbpath", "/app/data/events.db", "-path", "./migrations", "-direction", "up"]
 
@@ -32,7 +32,7 @@ services:
       EVENT_SYNC_INTERVAL: "1m"
       CONFIG_PATH: "/app/config.yaml" 
     volumes:
-      - ./app-data:/app/data
+      - ./data:/app/data
     networks:
       - betting_network
     depends_on:
