@@ -7,7 +7,7 @@ CREATE TABLE bets (
     recorded_home_win_chance REAL NOT NULL,
     recorded_away_win_chance REAL NOT NULL,
     recorded_draw_chance REAL NOT NULL,
-    placed_at TEXT NOT NULL, -- ISO 8601 timestamp
+    placed_at DATETIME NOT NULL, -- ISO 8601 timestamp
     status TEXT NOT NULL DEFAULT 'Pending', -- 'Pending', 'Won', 'Lost', 'Paid', 'Failed'
     payout_amount REAL DEFAULT 0,
     FOREIGN KEY (event_id) REFERENCES events(id)
